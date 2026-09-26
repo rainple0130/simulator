@@ -8,8 +8,7 @@ import { MODE_LABEL } from "@/lib/modes";
 import { formatDateTime } from "@/lib/format";
 
 export default async function TeacherDashboardPage() {
-  const stats = aggregateStats();
-  const scenarios = getTeacherScenarioOverviews();
+  const [stats, scenarios] = await Promise.all([aggregateStats(), getTeacherScenarioOverviews()]);
 
   return (
     <div className="space-y-8">

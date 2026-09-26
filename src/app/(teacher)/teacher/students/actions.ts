@@ -10,7 +10,7 @@ export async function createStudentAction(
 ) {
   await requireTeacher();
 
-  const result = createStudent({
+  const result = await createStudent({
     username: String(formData.get("username") ?? ""),
     password: String(formData.get("password") ?? ""),
     displayName: String(formData.get("displayName") ?? ""),

@@ -8,7 +8,7 @@ import { formatDateTime } from "@/lib/format";
 
 export default async function ReportsPage() {
   const user = await requireUser();
-  const overview = getReportOverview(user.id);
+  const overview = await getReportOverview(user.id);
 
   return (
     <div className="space-y-8">

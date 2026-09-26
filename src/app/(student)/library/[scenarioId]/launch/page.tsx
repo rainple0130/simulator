@@ -18,7 +18,7 @@ export default async function LaunchPage({
 
   if (!attemptId) redirect(`/library/${scenarioId}`);
 
-  const attempt = getAttempt(attemptId);
+  const attempt = await getAttempt(attemptId);
   if (!attempt || attempt.user_id !== user.id || attempt.scenario_id !== scenarioId) {
     redirect(`/library/${scenarioId}`);
   }

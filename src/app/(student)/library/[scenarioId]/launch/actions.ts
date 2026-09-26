@@ -9,7 +9,7 @@ export async function completeAttemptAction(formData: FormData) {
   const user = await requireUser();
   const attemptId = String(formData.get("attemptId") ?? "");
 
-  const attempt = getAttempt(attemptId);
+  const attempt = await getAttempt(attemptId);
   if (!attempt || attempt.user_id !== user.id) {
     redirect("/library");
   }
@@ -20,7 +20,7 @@ export async function completeAttemptAction(formData: FormData) {
   const errors = Number(formData.get("errors")) || 0;
   const notes = String(formData.get("notes") ?? "").trim();
 
-  completeAttempt(attemptId, score, {
+  await completeAttempt(attemptId, score, {
     time_s: timeSeconds,
     errors,
     ...(notes ? { notes } : {}),
@@ -28,7 +28,7 @@ export async function completeAttemptAction(formData: FormData) {
 
   // Demo mode has no real Quest telemetry, so derive a plausible step/error timeline
   // from the entered score/time/errors for the training-history report views.
-  recordAttemptEvents(
+  await recordAttemptEvents(
     attemptId,
     synthesizeEvents({
       category: attempt.scenario_category,

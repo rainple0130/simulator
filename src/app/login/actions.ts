@@ -8,7 +8,7 @@ export async function loginAction(_prevState: { error?: string } | undefined, fo
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  const user = username ? findUserByUsername(username) : null;
+  const user = username ? await findUserByUsername(username) : null;
   if (!user || !verifyPassword(password, user.password_hash)) {
     return { error: "Invalid username or password." };
   }

@@ -47,47 +47,49 @@ const DETAILS_SELECT = `
   JOIN users ON users.id = attempts.user_id
 `;
 
-export function createAttempt(userId: string, scenarioId: string, mode: Mode): string {
+export async function createAttempt(userId: string, scenarioId: string, mode: Mode): Promise<string> {
   const id = crypto.randomUUID();
-  getDb()
-    .prepare(
-      "INSERT INTO attempts (id, user_id, scenario_id, status, mode) VALUES (?, ?, ?, 'in_progress', ?)"
-    )
-    .run(id, userId, scenarioId, mode);
+  const db = await getDb();
+  await db.execute({
+    sql: "INSERT INTO attempts (id, user_id, scenario_id, status, mode) VALUES (?, ?, ?, 'in_progress', ?)",
+    args: [id, userId, scenarioId, mode],
+  });
   return id;
 }
 
-export function completeAttempt(
+export async function completeAttempt(
   attemptId: string,
   score: number,
   metrics: Record<string, unknown>
-): void {
-  getDb()
-    .prepare(
-      `UPDATE attempts
+): Promise<void> {
+  const db = await getDb();
+  await db.execute({
+    sql: `UPDATE attempts
        SET status = 'completed', score = ?, metrics_json = ?, completed_at = datetime('now')
-       WHERE id = ?`
-    )
-    .run(score, JSON.stringify(metrics), attemptId);
+       WHERE id = ?`,
+    args: [score, JSON.stringify(metrics), attemptId],
+  });
 }
 
-export function getAttempt(id: string): AttemptWithDetails | null {
-  const row = getDb()
-    .prepare(`${DETAILS_SELECT} WHERE attempts.id = ?`)
-    .get(id) as AttemptWithDetails | undefined;
-  return row ?? null;
+export async function getAttempt(id: string): Promise<AttemptWithDetails | null> {
+  const db = await getDb();
+  const result = await db.execute({ sql: `${DETAILS_SELECT} WHERE attempts.id = ?`, args: [id] });
+  return (result.rows[0] as unknown as AttemptWithDetails) ?? null;
 }
 
-export function listAttemptsForUser(userId: string): AttemptWithDetails[] {
-  return getDb()
-    .prepare(`${DETAILS_SELECT} WHERE attempts.user_id = ? ORDER BY attempts.started_at DESC`)
-    .all(userId) as AttemptWithDetails[];
+export async function listAttemptsForUser(userId: string): Promise<AttemptWithDetails[]> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `${DETAILS_SELECT} WHERE attempts.user_id = ? ORDER BY attempts.started_at DESC`,
+    args: [userId],
+  });
+  return result.rows as unknown as AttemptWithDetails[];
 }
 
-export function listAllAttempts(): AttemptWithDetails[] {
-  return getDb()
-    .prepare(`${DETAILS_SELECT} ORDER BY attempts.started_at DESC`)
-    .all() as AttemptWithDetails[];
+export async function listAllAttempts(): Promise<AttemptWithDetails[]> {
+  const db = await getDb();
+  const result = await db.execute(`${DETAILS_SELECT} ORDER BY attempts.started_at DESC`);
+  return result.rows as unknown as AttemptWithDetails[];
 }
 
 export function criteriaForAttempt(attempt: AttemptWithDetails): GradingCriteria {
@@ -124,14 +126,13 @@ export interface AggregateStats {
 /** Cohort-wide counts and the mode breakdown only — anything scenario-specific (average
  * score, pass rate, trend, individual attempts) lives in getTeacherScenarioOverviews()
  * instead, scoped per scenario rather than blended across every procedure. */
-export function aggregateStats(): AggregateStats {
-  const db = getDb();
+export async function aggregateStats(): Promise<AggregateStats> {
+  const db = await getDb();
 
-  const totalStudents = (
-    db.prepare("SELECT count(*) as c FROM users WHERE role = 'student'").get() as { c: number }
-  ).c;
+  const totalStudentsResult = await db.execute("SELECT count(*) as c FROM users WHERE role = 'student'");
+  const totalStudents = Number(totalStudentsResult.rows[0].c);
 
-  const attempts = listAllAttempts();
+  const attempts = await listAllAttempts();
   const completed = attempts.filter((a) => a.status === "completed");
 
   const byMode = MODES.map((mode) => ({

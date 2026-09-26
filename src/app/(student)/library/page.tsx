@@ -4,7 +4,7 @@ import { DifficultyHex, HexBullet } from "@/components/hex";
 import { MODE_LABEL } from "@/lib/modes";
 
 export default async function LibraryPage() {
-  const groups = listScenariosGroupedByCategory({ activeOnly: true });
+  const groups = await listScenariosGroupedByCategory({ activeOnly: true });
 
   return (
     <div className="space-y-8">

@@ -11,7 +11,7 @@ export default async function ScenarioDetailPage({
   params: Promise<{ scenarioId: string }>;
 }) {
   const { scenarioId } = await params;
-  const scenario = getScenario(scenarioId);
+  const scenario = await getScenario(scenarioId);
   if (!scenario || !scenario.is_active) notFound();
 
   const modes = scenarioModes(scenario);

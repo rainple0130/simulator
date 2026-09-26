@@ -14,11 +14,13 @@ export default async function StudentDetailPage({
   params: Promise<{ studentId: string }>;
 }) {
   const { studentId } = await params;
-  const student = getUserById(studentId);
+  const student = await getUserById(studentId);
   if (!student || student.role !== "student") notFound();
 
-  const overview = getReportOverview(studentId);
-  const settings = getUserSettings(studentId);
+  const [overview, settings] = await Promise.all([
+    getReportOverview(studentId),
+    getUserSettings(studentId),
+  ]);
 
   return (
     <div className="space-y-8">

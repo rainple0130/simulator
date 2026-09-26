@@ -34,18 +34,20 @@ export function scenarioCriteria(scenario: ScenarioRow): GradingCriteria {
   };
 }
 
-export function listScenarios(options: { activeOnly?: boolean } = {}): ScenarioRow[] {
+export async function listScenarios(options: { activeOnly?: boolean } = {}): Promise<ScenarioRow[]> {
   const { activeOnly = false } = options;
   const sql = activeOnly
     ? "SELECT * FROM scenarios WHERE is_active = 1 ORDER BY category, title"
     : "SELECT * FROM scenarios ORDER BY category, title";
-  return getDb().prepare(sql).all() as ScenarioRow[];
+  const db = await getDb();
+  const result = await db.execute(sql);
+  return result.rows as unknown as ScenarioRow[];
 }
 
-export function listScenariosGroupedByCategory(
+export async function listScenariosGroupedByCategory(
   options: { activeOnly?: boolean } = {}
-): { category: string; scenarios: ScenarioRow[] }[] {
-  const rows = listScenarios(options);
+): Promise<{ category: string; scenarios: ScenarioRow[] }[]> {
+  const rows = await listScenarios(options);
   const groups = new Map<string, ScenarioRow[]>();
   for (const row of rows) {
     if (!groups.has(row.category)) groups.set(row.category, []);
@@ -54,11 +56,10 @@ export function listScenariosGroupedByCategory(
   return Array.from(groups.entries()).map(([category, scenarios]) => ({ category, scenarios }));
 }
 
-export function getScenario(id: string): ScenarioRow | null {
-  const row = getDb().prepare("SELECT * FROM scenarios WHERE id = ?").get(id) as
-    | ScenarioRow
-    | undefined;
-  return row ?? null;
+export async function getScenario(id: string): Promise<ScenarioRow | null> {
+  const db = await getDb();
+  const result = await db.execute({ sql: "SELECT * FROM scenarios WHERE id = ?", args: [id] });
+  return (result.rows[0] as unknown as ScenarioRow) ?? null;
 }
 
 export interface ScenarioInput {
@@ -74,18 +75,19 @@ export interface ScenarioInput {
   timeLimitS: number | null;
 }
 
-export function createScenario(input: ScenarioInput): { ok: true; id: string } | { ok: false; error: string } {
+export async function createScenario(
+  input: ScenarioInput
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!input.category.trim() || !input.title.trim()) {
     return { ok: false, error: "Category and title are required." };
   }
   const id = crypto.randomUUID();
-  getDb()
-    .prepare(
-      `INSERT INTO scenarios
+  const db = await getDb();
+  await db.execute({
+    sql: `INSERT INTO scenarios
         (id, category, title, description, difficulty, is_active, available_modes, pass_score, excellent_score, max_errors, time_limit_s)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
       id,
       input.category.trim(),
       input.title.trim(),
@@ -96,26 +98,26 @@ export function createScenario(input: ScenarioInput): { ok: true; id: string } |
       input.passScore,
       input.excellentScore,
       input.maxErrors,
-      input.timeLimitS
-    );
+      input.timeLimitS,
+    ],
+  });
   return { ok: true, id };
 }
 
-export function updateScenario(
+export async function updateScenario(
   id: string,
   input: ScenarioInput
-): { ok: true } | { ok: false; error: string } {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!input.category.trim() || !input.title.trim()) {
     return { ok: false, error: "Category and title are required." };
   }
-  getDb()
-    .prepare(
-      `UPDATE scenarios SET
+  const db = await getDb();
+  await db.execute({
+    sql: `UPDATE scenarios SET
         category = ?, title = ?, description = ?, difficulty = ?, is_active = ?, available_modes = ?,
         pass_score = ?, excellent_score = ?, max_errors = ?, time_limit_s = ?
-       WHERE id = ?`
-    )
-    .run(
+       WHERE id = ?`,
+    args: [
       input.category.trim(),
       input.title.trim(),
       input.description.trim(),
@@ -126,7 +128,8 @@ export function updateScenario(
       input.excellentScore,
       input.maxErrors,
       input.timeLimitS,
-      id
-    );
+      id,
+    ],
+  });
   return { ok: true };
 }

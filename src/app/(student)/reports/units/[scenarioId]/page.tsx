@@ -17,7 +17,7 @@ export default async function UnitReportPage({
 }) {
   const { scenarioId } = await params;
   const user = await requireUser();
-  const unit = getUnitReport(user.id, scenarioId);
+  const unit = await getUnitReport(user.id, scenarioId);
   if (!unit) notFound();
 
   return (

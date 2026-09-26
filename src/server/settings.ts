@@ -29,13 +29,14 @@ interface UserSettingsRow {
   vr_turn_mode: VrTurnMode;
 }
 
-export function getUserSettings(userId: string): UserSettings {
-  const row = getDb()
-    .prepare(
-      `SELECT sound_enabled, hints_enabled, vr_dominant_hand, vr_haptics, vr_turn_mode
-       FROM user_settings WHERE user_id = ?`
-    )
-    .get(userId) as UserSettingsRow | undefined;
+export async function getUserSettings(userId: string): Promise<UserSettings> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT sound_enabled, hints_enabled, vr_dominant_hand, vr_haptics, vr_turn_mode
+       FROM user_settings WHERE user_id = ?`,
+    args: [userId],
+  });
+  const row = result.rows[0] as unknown as UserSettingsRow | undefined;
 
   if (!row) return DEFAULT_SETTINGS;
 
@@ -48,10 +49,10 @@ export function getUserSettings(userId: string): UserSettings {
   };
 }
 
-export function updateUserSettings(userId: string, input: UserSettings): void {
-  getDb()
-    .prepare(
-      `INSERT INTO user_settings (user_id, sound_enabled, hints_enabled, vr_dominant_hand, vr_haptics, vr_turn_mode, updated_at)
+export async function updateUserSettings(userId: string, input: UserSettings): Promise<void> {
+  const db = await getDb();
+  await db.execute({
+    sql: `INSERT INTO user_settings (user_id, sound_enabled, hints_enabled, vr_dominant_hand, vr_haptics, vr_turn_mode, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(user_id) DO UPDATE SET
          sound_enabled = excluded.sound_enabled,
@@ -59,14 +60,14 @@ export function updateUserSettings(userId: string, input: UserSettings): void {
          vr_dominant_hand = excluded.vr_dominant_hand,
          vr_haptics = excluded.vr_haptics,
          vr_turn_mode = excluded.vr_turn_mode,
-         updated_at = datetime('now')`
-    )
-    .run(
+         updated_at = datetime('now')`,
+    args: [
       userId,
       input.soundEnabled ? 1 : 0,
       input.hintsEnabled ? 1 : 0,
       input.vrDominantHand,
       input.vrHaptics,
-      input.vrTurnMode
-    );
+      input.vrTurnMode,
+    ],
+  });
 }

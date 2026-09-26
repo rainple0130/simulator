@@ -80,8 +80,8 @@ function passRateFor(rows: AttemptWithDetails[]): number | null {
   return grades.filter((g) => g !== "fail").length / grades.length;
 }
 
-export function getReportOverview(userId: string): ReportOverview {
-  const attempts = listAttemptsForUser(userId);
+export async function getReportOverview(userId: string): Promise<ReportOverview> {
+  const attempts = await listAttemptsForUser(userId);
   const completed = attempts.filter((a) => a.status === "completed");
 
   // Group by scenario using every attempt (not just completed ones), so a scenario the
@@ -139,8 +139,8 @@ export interface UnitReport {
   trend: TrendPoint[];
 }
 
-export function getUnitReport(userId: string, scenarioId: string): UnitReport | null {
-  const attempts = listAttemptsForUser(userId).filter((a) => a.scenario_id === scenarioId);
+export async function getUnitReport(userId: string, scenarioId: string): Promise<UnitReport | null> {
+  const attempts = (await listAttemptsForUser(userId)).filter((a) => a.scenario_id === scenarioId);
   if (attempts.length === 0) return null;
 
   const completed = attempts.filter((a) => a.status === "completed");
@@ -202,9 +202,8 @@ export interface TeacherScenarioOverview {
 /** Scenario-first, student-second breakdown for the teacher dashboard: pick a scenario, then
  * optionally narrow to one student (the "by student" list becomes a filter here, not its own
  * separate table — and only a single-student trend is ever charted). */
-export function getTeacherScenarioOverviews(): TeacherScenarioOverview[] {
-  const scenarios = listScenarios();
-  const attempts = listAllAttempts();
+export async function getTeacherScenarioOverviews(): Promise<TeacherScenarioOverview[]> {
+  const [scenarios, attempts] = await Promise.all([listScenarios(), listAllAttempts()]);
 
   const overviews = scenarios.map((sc) => {
     const rows = attempts.filter((a) => a.scenario_id === sc.id);
@@ -264,11 +263,11 @@ export interface AttemptReport {
   metricChecks: MetricCheck[];
 }
 
-export function getAttemptReport(attemptId: string): AttemptReport | null {
-  const attempt = getAttempt(attemptId);
+export async function getAttemptReport(attemptId: string): Promise<AttemptReport | null> {
+  const attempt = await getAttempt(attemptId);
   if (!attempt) return null;
 
-  const events = getAttemptEvents(attemptId);
+  const events = await getAttemptEvents(attemptId);
   const steps = events.filter((e) => e.type === "step");
   const errors = events.filter((e) => e.type === "error");
   const hints = events.filter((e) => e.type === "hint");

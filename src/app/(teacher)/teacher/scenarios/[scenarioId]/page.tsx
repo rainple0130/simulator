@@ -10,7 +10,7 @@ export default async function EditScenarioPage({
   params: Promise<{ scenarioId: string }>;
 }) {
   const { scenarioId } = await params;
-  const scenario = getScenario(scenarioId);
+  const scenario = await getScenario(scenarioId);
   if (!scenario) notFound();
 
   const boundAction = updateScenarioAction.bind(null, scenarioId);

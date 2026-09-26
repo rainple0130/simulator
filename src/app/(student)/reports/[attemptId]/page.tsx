@@ -18,7 +18,7 @@ export default async function ReportDetailPage({
 }) {
   const { attemptId } = await params;
   const user = await requireUser();
-  const report = getAttemptReport(attemptId);
+  const report = await getAttemptReport(attemptId);
 
   if (!report) notFound();
   const { attempt } = report;

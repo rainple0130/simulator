@@ -10,7 +10,7 @@ export async function launchAction(formData: FormData) {
   const user = await requireUser();
   const scenarioId = String(formData.get("scenarioId") ?? "");
 
-  const scenario = getScenario(scenarioId);
+  const scenario = await getScenario(scenarioId);
   if (!scenario || !scenario.is_active) {
     redirect("/library");
   }
@@ -19,6 +19,6 @@ export async function launchAction(formData: FormData) {
   const allowedModes = scenarioModes(scenario);
   const mode = isMode(modeRaw) && allowedModes.includes(modeRaw) ? modeRaw : allowedModes[0];
 
-  const attemptId = createAttempt(user.id, scenarioId, mode);
+  const attemptId = await createAttempt(user.id, scenarioId, mode);
   redirect(`/library/${scenarioId}/launch?attempt=${attemptId}`);
 }

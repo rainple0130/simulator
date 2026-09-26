@@ -4,7 +4,7 @@ import { DifficultyHex, Hex } from "@/components/hex";
 import { MODE_LABEL } from "@/lib/modes";
 
 export default async function TeacherScenariosPage() {
-  const scenarios = listScenarios();
+  const scenarios = await listScenarios();
 
   return (
     <div className="space-y-6">

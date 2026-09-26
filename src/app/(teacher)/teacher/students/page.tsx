@@ -3,7 +3,7 @@ import { listStudents } from "@/server/users";
 import { NewStudentForm } from "./new-student-form";
 
 export default async function TeacherStudentsPage() {
-  const students = listStudents();
+  const students = await listStudents();
 
   return (
     <div className="space-y-8">

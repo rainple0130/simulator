@@ -33,7 +33,7 @@ export async function createScenarioAction(
   formData: FormData
 ) {
   await requireTeacher();
-  const result = createScenario(readScenarioInput(formData));
+  const result = await createScenario(readScenarioInput(formData));
   if (!result.ok) return { error: result.error };
 
   revalidatePath("/teacher/scenarios");
@@ -46,7 +46,7 @@ export async function updateScenarioAction(
   formData: FormData
 ) {
   await requireTeacher();
-  const result = updateScenario(scenarioId, readScenarioInput(formData));
+  const result = await updateScenario(scenarioId, readScenarioInput(formData));
   if (!result.ok) return { error: result.error };
 
   revalidatePath("/teacher/scenarios");

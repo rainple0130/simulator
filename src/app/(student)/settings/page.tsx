@@ -4,7 +4,7 @@ import { SettingsForm } from "./settings-form";
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const settings = getUserSettings(user.id);
+  const settings = await getUserSettings(user.id);
 
   return (
     <div className="max-w-xl">

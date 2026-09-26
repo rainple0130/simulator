@@ -10,7 +10,7 @@ export async function updateSettingsAction(
 ) {
   const user = await requireUser();
 
-  updateUserSettings(user.id, {
+  await updateUserSettings(user.id, {
     soundEnabled: formData.get("soundEnabled") === "on",
     hintsEnabled: formData.get("hintsEnabled") === "on",
     vrDominantHand: (String(formData.get("vrDominantHand") ?? "right") as VrDominantHand),

@@ -26,15 +26,14 @@ export function verifyPassword(password: string, hash: string): boolean {
 }
 
 export async function createSession(userId: string): Promise<void> {
-  const db = getDb();
+  const db = await getDb();
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
 
-  db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(
-    token,
-    userId,
-    expiresAt
-  );
+  await db.execute({
+    sql: "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
+    args: [token, userId, expiresAt],
+  });
 
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
@@ -50,7 +49,8 @@ export async function destroySession(): Promise<void> {
   const store = await cookies();
   const token = store.get(COOKIE_NAME)?.value;
   if (token) {
-    getDb().prepare("DELETE FROM sessions WHERE id = ?").run(token);
+    const db = await getDb();
+    await db.execute({ sql: "DELETE FROM sessions WHERE id = ?", args: [token] });
   }
   store.delete(COOKIE_NAME);
 }
@@ -60,17 +60,17 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const token = store.get(COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const row = getDb()
-    .prepare(
-      `SELECT users.id as id, users.username as username, users.role as role,
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT users.id as id, users.username as username, users.role as role,
               users.display_name as displayName
        FROM sessions
        JOIN users ON users.id = sessions.user_id
-       WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`
-    )
-    .get(token) as SessionUser | undefined;
+       WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`,
+    args: [token],
+  });
 
-  return row ?? null;
+  return (result.rows[0] as unknown as SessionUser) ?? null;
 }
 
 export async function requireUser(): Promise<SessionUser> {

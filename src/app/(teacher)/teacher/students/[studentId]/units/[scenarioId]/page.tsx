@@ -16,10 +16,10 @@ export default async function StudentUnitReportPage({
   params: Promise<{ studentId: string; scenarioId: string }>;
 }) {
   const { studentId, scenarioId } = await params;
-  const student = getUserById(studentId);
+  const student = await getUserById(studentId);
   if (!student || student.role !== "student") notFound();
 
-  const unit = getUnitReport(studentId, scenarioId);
+  const unit = await getUnitReport(studentId, scenarioId);
   if (!unit) notFound();
 
   return (

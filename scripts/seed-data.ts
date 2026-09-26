@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import type Database from "better-sqlite3";
+import type { Client, InStatement } from "@libsql/client";
 import { serializeModes, type Mode } from "../src/lib/modes";
 import { synthesizeEvents } from "../src/lib/event-synthesis";
 
@@ -60,51 +60,45 @@ const SCENARIOS: ScenarioSeed[] = [
   },
 ];
 
-export function seed(db: Database.Database, force = false) {
-  const insertMany = db.transaction(() => {
-    if (force) {
-      db.exec(
-        `DELETE FROM attempt_events; DELETE FROM attempts; DELETE FROM scenarios;
-         DELETE FROM user_settings; DELETE FROM sessions; DELETE FROM users;`
-      );
-    }
+export async function seed(db: Client, force = false): Promise<void> {
+  const statements: InStatement[] = [];
 
-    const insertUser = db.prepare(
-      `INSERT INTO users (id, username, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`
+  if (force) {
+    statements.push(
+      "DELETE FROM attempt_events",
+      "DELETE FROM attempts",
+      "DELETE FROM scenarios",
+      "DELETE FROM user_settings",
+      "DELETE FROM sessions",
+      "DELETE FROM users"
     );
+  }
 
-    const teacherId = crypto.randomUUID();
-    insertUser.run(
-      teacherId,
-      "teacher",
-      bcrypt.hashSync("teacher123", 10),
-      "teacher",
-      "Dr. Chen (Teacher)"
-    );
+  const teacherId = crypto.randomUUID();
+  statements.push({
+    sql: `INSERT INTO users (id, username, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`,
+    args: [teacherId, "teacher", bcrypt.hashSync("teacher123", 10), "teacher", "Dr. Chen (Teacher)"],
+  });
 
-    const studentIds: string[] = [];
-    for (let i = 1; i <= 3; i++) {
-      const id = crypto.randomUUID();
-      studentIds.push(id);
-      insertUser.run(
-        id,
-        `student${i}`,
-        bcrypt.hashSync("student123", 10),
-        "student",
-        `Student ${i}`
-      );
-    }
+  const studentIds: string[] = [];
+  for (let i = 1; i <= 3; i++) {
+    const id = crypto.randomUUID();
+    studentIds.push(id);
+    statements.push({
+      sql: `INSERT INTO users (id, username, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`,
+      args: [id, `student${i}`, bcrypt.hashSync("student123", 10), "student", `Student ${i}`],
+    });
+  }
 
-    const insertScenario = db.prepare(
-      `INSERT INTO scenarios
+  const scenarioIds: string[] = [];
+  for (const s of SCENARIOS) {
+    const id = crypto.randomUUID();
+    scenarioIds.push(id);
+    statements.push({
+      sql: `INSERT INTO scenarios
         (id, category, title, description, difficulty, available_modes, pass_score, excellent_score, max_errors, time_limit_s)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const scenarioIds: string[] = [];
-    for (const s of SCENARIOS) {
-      const id = crypto.randomUUID();
-      scenarioIds.push(id);
-      insertScenario.run(
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
         id,
         s.category,
         s.title,
@@ -114,31 +108,26 @@ export function seed(db: Database.Database, force = false) {
         s.passScore,
         s.excellentScore,
         s.maxErrors,
-        s.timeLimitS
-      );
-    }
+        s.timeLimitS,
+      ],
+    });
+  }
 
-    const insertAttempt = db.prepare(
-      `INSERT INTO attempts (id, user_id, scenario_id, status, mode, score, metrics_json, started_at, completed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?)`
-    );
-    const insertEvent = db.prepare(
-      `INSERT INTO attempt_events (id, attempt_id, seq, t_offset_s, type, label, points)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
-
-    function addCompletedAttempt(
-      userId: string,
-      scenario: ScenarioSeed,
-      scenarioId: string,
-      mode: Mode,
-      daysAgo: number,
-      score: number,
-      timeSeconds: number,
-      errors: number
-    ) {
-      const attemptId = crypto.randomUUID();
-      insertAttempt.run(
+  function addCompletedAttempt(
+    userId: string,
+    scenario: ScenarioSeed,
+    scenarioId: string,
+    mode: Mode,
+    daysAgo: number,
+    score: number,
+    timeSeconds: number,
+    errors: number
+  ) {
+    const attemptId = crypto.randomUUID();
+    statements.push({
+      sql: `INSERT INTO attempts (id, user_id, scenario_id, status, mode, score, metrics_json, started_at, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?)`,
+      args: [
         attemptId,
         userId,
         scenarioId,
@@ -147,56 +136,46 @@ export function seed(db: Database.Database, force = false) {
         score,
         JSON.stringify({ time_s: timeSeconds, errors }),
         `-${daysAgo} days`,
-        new Date(Date.now() - daysAgo * 86400000 + timeSeconds * 1000).toISOString()
-      );
-      synthesizeEvents({ category: scenario.category, mode, timeSeconds, errors, score }).forEach(
-        (event, i) => {
-          insertEvent.run(
-            crypto.randomUUID(),
-            attemptId,
-            i,
-            event.tOffsetS,
-            event.type,
-            event.label,
-            event.points
-          );
-        }
-      );
-    }
-
-    // Give each student a growing history (more attempts, generally improving scores) spread
-    // across the past few weeks, across every scenario and mode, so every report view
-    // (trend charts, mode breakdowns, per-unit averages, training history, grading) has
-    // real, varied content out of the box.
-    studentIds.forEach((studentId, studentIndex) => {
-      SCENARIOS.forEach((scenario, scenarioIndex) => {
-        const scenarioId = scenarioIds[scenarioIndex];
-        const attemptCount = 2 + studentIndex;
-        for (let i = 0; i < attemptCount; i++) {
-          const mode = scenario.modes[i % scenario.modes.length];
-          const daysAgo = (attemptCount - i) * 3 + studentIndex * 2;
-          const baseScore = 65 + studentIndex * 5 + i * 4;
-          const score = Math.min(100, Math.max(50, baseScore + Math.round(Math.random() * 10 - 5)));
-          const errors = Math.max(0, 3 - i - studentIndex + Math.round(Math.random()));
-          const timeSeconds = 90 + errors * 20 + Math.round(Math.random() * 40);
-          addCompletedAttempt(studentId, scenario, scenarioId, mode, daysAgo, score, timeSeconds, errors);
-        }
-      });
+        new Date(Date.now() - daysAgo * 86400000 + timeSeconds * 1000).toISOString(),
+      ],
     });
-
-    // One in-progress attempt so the "resume simulation" path also has sample data.
-    insertAttempt.run(
-      crypto.randomUUID(),
-      studentIds[2],
-      scenarioIds[1],
-      "in_progress",
-      "practice",
-      null,
-      null,
-      "-1 hours",
-      null
+    synthesizeEvents({ category: scenario.category, mode, timeSeconds, errors, score }).forEach(
+      (event, i) => {
+        statements.push({
+          sql: `INSERT INTO attempt_events (id, attempt_id, seq, t_offset_s, type, label, points)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [crypto.randomUUID(), attemptId, i, event.tOffsetS, event.type, event.label, event.points],
+        });
+      }
     );
+  }
+
+  // Give each student a growing history (more attempts, generally improving scores) spread
+  // across the past few weeks, across every scenario and mode, so every report view
+  // (trend charts, mode breakdowns, per-unit averages, training history, grading) has
+  // real, varied content out of the box.
+  studentIds.forEach((studentId, studentIndex) => {
+    SCENARIOS.forEach((scenario, scenarioIndex) => {
+      const scenarioId = scenarioIds[scenarioIndex];
+      const attemptCount = 2 + studentIndex;
+      for (let i = 0; i < attemptCount; i++) {
+        const mode = scenario.modes[i % scenario.modes.length];
+        const daysAgo = (attemptCount - i) * 3 + studentIndex * 2;
+        const baseScore = 65 + studentIndex * 5 + i * 4;
+        const score = Math.min(100, Math.max(50, baseScore + Math.round(Math.random() * 10 - 5)));
+        const errors = Math.max(0, 3 - i - studentIndex + Math.round(Math.random()));
+        const timeSeconds = 90 + errors * 20 + Math.round(Math.random() * 40);
+        addCompletedAttempt(studentId, scenario, scenarioId, mode, daysAgo, score, timeSeconds, errors);
+      }
+    });
   });
 
-  insertMany();
+  // One in-progress attempt so the "resume simulation" path also has sample data.
+  statements.push({
+    sql: `INSERT INTO attempts (id, user_id, scenario_id, status, mode, score, metrics_json, started_at, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ?)`,
+    args: [crypto.randomUUID(), studentIds[2], scenarioIds[1], "in_progress", "practice", null, null, "-1 hours", null],
+  });
+
+  await db.batch(statements, "write");
 }
